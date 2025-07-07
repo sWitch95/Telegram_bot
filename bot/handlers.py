@@ -1,62 +1,59 @@
 from typing import Final
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-
-from rag.langchain_pipeline import answer_query  # LangChain query function import
+from rag.langchain_pipeline import answer_query
 
 TOKEN = '7677389671:AAE_ILH0WyacSU21vqUlLCIn_m-gSY-pNfg'
 BOT_USERNAME: Final = '@medication_remider_and_info_bot'
 
+# 🔹 Start Command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello! I am your medication assistant bot. Ask me about any medicine.")
+    await update.message.reply_text(
+        "👋 Hello! আমি আপনার bilingual ওষুধ সহকারী বট।\n"
+        "আপনি ইংরেজি বা বাংলা যেকোনো ভাষায় প্রশ্ন করতে পারেন।"
+    )
 
+# 🔹 Help Command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("You can ask me things like:\n- What is Napa?\n- What are the side effects of Seclo?")
+    await update.message.reply_text(
+        "❓ উদাহরণ:\n"
+        "- What is Paracetamol?\n"
+        "- সেক্লোর পার্শ্বপ্রতিক্রিয়া কী?\n"
+        "- Napa কিসের জন্য ব্যবহৃত হয়?"
+    )
 
+# 🔹 Custom Command (optional)
 async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("This is a custom command response!")
+    await update.message.reply_text("⚙️ Custom command active!")
 
-# Response logic
+# 🔄 Main handler
 def handle_response(text: str) -> str:
-    processed = text.lower()
+    try:
+        return answer_query(text)  # handled inside langchain_pipeline
+    except Exception as e:
+        print("❌ handle_response error:", e)
+        return "⚠️ I'm having trouble understanding. Please try again."
 
-    if any(kw in processed for kw in ["what is", "use of", "side effect", "why", "how to use", "dosage"]):
-        return answer_query(processed)
-
-    elif "reminder" in processed:
-        return "I can help you set a reminder for your medication. (Reminder feature coming soon!)"
-    
-    elif "hello" in processed or "hi" in processed:
-        return "Hi! I'm here to help with medicine-related questions."
-
-    else:
-        return "I'm not sure about that. Please ask me about a medication."
-
-#  Handles every user message
+# 💬 Message handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_type = update.message.chat.type
-    text = update.message.text
+    text = update.message.text.strip()
 
-    print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
+    print(f"📥 User ({update.message.chat.id}) in {message_type}: {text}")
 
     if message_type == 'group' and BOT_USERNAME in text:
-        new_text = text.replace(BOT_USERNAME, '').strip()
-        response = handle_response(new_text)
-    elif message_type == 'private':
-        response = handle_response(text)
-    else:
-        return  # Ignore non-mention group messages
+        text = text.replace(BOT_USERNAME, '').strip()
 
-    print('Bot:', response)
+    response = handle_response(text)
     await update.message.reply_text(response)
 
-#  Error handler
+# ⚠️ Error handler
 async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f'Update "{update}" caused error "{context.error}"')
+    print(f"⚠️ Error: {context.error}")
 
-#  Run bot
+# 🚀 Run bot
 if __name__ == '__main__':
-    print(" Starting the bot...")
+    print("🤖 Bot is starting...")
     application = ApplicationBuilder().token(TOKEN).build()
 
     application.add_handler(CommandHandler('start', start_command))
@@ -65,5 +62,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error)
 
-    print(" Bot is running...")
+    print("✅ Bot is running...")
     application.run_polling(poll_interval=3)
