@@ -7,6 +7,7 @@ from telegram.ext import (
 from rag.langchain_pipeline import answer_query
 from tools.ocr_reader import extract_text_from_image
 from tools.voice_handler import voice_handler
+from tools.reminder_handler import add_reminder_command
 import os
 import tempfile
 
@@ -15,16 +16,16 @@ BOT_USERNAME: Final = '@medication_remider_and_info_bot'
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 হ্যালো! আমি আপনার bilingual ওষুধ সহকারী বট। ইংরেজি বা বাংলা ভাষায় প্রশ্ন করুন, ওষুধের ছবি বা ভয়েস মেসেজ পাঠান।"
+        "👋 হ্যালো! আমি আপনার bilingual ঃওষুধ সহয়কারী বট। ইংরেজি বা বাংলা ভাষায় প্রশ্ন করুন, ঃওষুধের ছবি বা ভয়েস মেসেজ পাঠান।"
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "❓ আপনি প্রশ্ন করতে পারেন:\n"
-        "- What is Napa?\n"
-        "- সেক্লোর পার্শ্বপ্রতিক্রিয়া কী?\n"
-        "- অথবা ওষুধের ছবি বা ভয়েস মেসেজ দিন।"
-    )
+        await update.message.reply_text(
+            """❓ আপনি প্রশ্ন করতে পারেন:
+    - What is Paracetamol?
+    - সেক্লোর পার্শ্বপ্রতিক্রিয়া কী?
+    - অথবা ঃওষুধের ছবি বা ভয়েস মেসেজ দিন।"""
+        )
 
 def handle_response(text: str) -> str:
     try:
@@ -47,18 +48,18 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(temp_ogg.name)
         temp_ogg.close()
 
-        recognized_text = voice_handler.speech_to_text(temp_ogg.name)
+        recognized_text, detected_lang = voice_handler.speech_to_text(temp_ogg.name, return_lang=True)
         os.unlink(temp_ogg.name)
 
         if not recognized_text:
-            await update.message.reply_text("❌ দুঃখিত, আপনার ভয়েস বোঝা যায়নি। আবার চেষ্টা করুন।")
+            await update.message.reply_text("❌ দুর্ভান, দ্যানি ভয়েস বুঝা যায়নি।")
             return
 
         await update.message.reply_text(f"🎙️ আপনি বলেছেন: {recognized_text}")
         answer = handle_response(recognized_text)
         await update.message.reply_text(f"📝 উত্তর:\n{answer}")
 
-        tts_path = voice_handler.text_to_speech(answer)
+        tts_path = voice_handler.text_to_speech(answer, language=detected_lang)
         if tts_path and os.path.exists(tts_path):
             with open(tts_path, 'rb') as voice_file:
                 await update.message.reply_voice(voice=voice_file)
@@ -86,11 +87,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data['ocr_text'] = ocr_text
         keyboard = [
-            [InlineKeyboardButton("🇧🇩 বাংলা", callback_data='lang_ben')],
+            [InlineKeyboardButton("🇧🇫 বাংলা", callback_data='lang_ben')],
             [InlineKeyboardButton("🇬🇧 English", callback_data='lang_eng')],
         ]
         await update.message.reply_text(
-            f"🧾 OCR টেক্সট:\n{ocr_text}\n\n🌐 ভাষা বেছে নিন:",
+            f"📜 OCR টেক্সট:\n{ocr_text}\n\n🌐 ভাষা বেছে নিন:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
@@ -143,12 +144,16 @@ if __name__ == '__main__':
 
     application.add_handler(CommandHandler('start', start_command))
     application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CommandHandler('remind', add_reminder_command))
+   
+
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
     application.add_handler(CallbackQueryHandler(handle_language_selection, pattern='^lang_'))
     application.add_handler(CallbackQueryHandler(handle_query_selection, pattern='^query_'))
     application.add_error_handler(error)
 
-    print("✅ Bot is running with full voice support")
+    print("✅ Bot is running with full voice + reminder support")
     application.run_polling(poll_interval=3)
